@@ -23,6 +23,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     create() {
+        this.createFlareTexture();
         this.createGrid();
         this.updateTurnIndicator();
         this.isAnimating = false;
@@ -31,6 +32,13 @@ export default class GameScene extends Phaser.Scene {
         this.events.on('remote-move', (move) => {
             this.handleMove(move.x, move.y, move.playerId);
         });
+    }
+
+    createFlareTexture() {
+        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+        graphics.fillStyle(0xffffff, 1);
+        graphics.fillCircle(8, 8, 8);
+        graphics.generateTexture('flare', 16, 16);
     }
 
     createGrid() {
@@ -129,7 +137,18 @@ export default class GameScene extends Phaser.Scene {
         for (let i = 0; i < cellData.count; i++) {
             const offset = this.getOrbOffset(i, cellData.count);
             const orb = this.add.circle(offset.x, offset.y, 8, color);
-            orb.setStrokeStyle(2, 0xffffff, 0.3);
+            orb.setStrokeStyle(2, 0xffffff, 0.5);
+            
+            // Pulsing animation
+            this.tweens.add({
+                targets: orb,
+                scale: 1.2,
+                duration: 800 + Math.random() * 400,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+
             cellUI.orbContainer.add(orb);
         }
 
@@ -141,7 +160,7 @@ export default class GameScene extends Phaser.Scene {
             this.tweens.add({
                 targets: cellUI.orbContainer,
                 angle: 360,
-                duration: 3000,
+                duration: 4000,
                 repeat: -1,
                 ease: 'Linear'
             });
@@ -150,52 +169,71 @@ export default class GameScene extends Phaser.Scene {
 
     getOrbOffset(index, total) {
         if (total === 1) return { x: 0, y: 0 };
-        if (total === 2) return { x: index === 0 ? -10 : 10, y: 0 };
+        if (total === 2) return { x: index === 0 ? -12 : 12, y: 0 };
         if (total === 3) {
-            const angle = (index * 120) * (Math.PI / 180);
-            return { x: Math.cos(angle) * 12, y: Math.sin(angle) * 12 };
+            const angle = (index * 120 - 90) * (Math.PI / 180);
+            return { x: Math.cos(angle) * 14, y: Math.sin(angle) * 14 };
         }
-        // For 4 or more (shouldn't happen with wave logic but safety)
-        const angle = (index * (360 / total)) * (Math.PI / 180);
-        return { x: Math.cos(angle) * 12, y: Math.sin(angle) * 12 };
+        return { x: 0, y: 0 };
     }
 
     async playReactionStep(step) {
+        const { width, height } = this.gridConfig;
+        
         return new Promise(resolve => {
-            const explosionAnims = [];
+            const moveAnims = [];
 
             // Trigger explosion effects
             step.explosions.forEach(exp => {
-                const cellUI = this.cells[exp.y * this.gridConfig.width + exp.x];
-                
-                // Visual explosion effect
-                const ring = this.add.circle(cellUI.rect.x, cellUI.rect.y, 10, 0xffffff, 0.5);
-                explosionAnims.push(new Promise(r => {
-                    this.tweens.add({
-                        targets: ring,
-                        scale: 4,
-                        alpha: 0,
-                        duration: 300,
-                        onComplete: () => {
-                            ring.destroy();
-                            r();
-                        }
-                    });
-                }));
+                const cellUI = this.cells[exp.y * width + exp.x];
+                const player = this.players.find(p => p.id === this.engine.getCell(exp.x, exp.y).owner) || { color: 0xffffff };
+                const neighbors = [];
+                if (exp.x > 0) neighbors.push({ x: exp.x - 1, y: exp.y });
+                if (exp.x < width - 1) neighbors.push({ x: exp.x + 1, y: exp.y });
+                if (exp.y > 0) neighbors.push({ x: exp.x, y: exp.y - 1 });
+                if (exp.y < height - 1) neighbors.push({ x: exp.x, y: exp.y + 1 });
+
+                // Screen shake
+                this.cameras.main.shake(100, 0.005);
+
+                // Create sliding orbs
+                neighbors.forEach(n => {
+                    const targetCellUI = this.cells[n.y * width + n.x];
+                    const tempOrb = this.add.circle(cellUI.rect.x, cellUI.rect.y, 8, player.color);
+                    tempOrb.setStrokeStyle(2, 0xffffff, 0.5);
+                    
+                    moveAnims.push(new Promise(r => {
+                        this.tweens.add({
+                            targets: tempOrb,
+                            x: targetCellUI.rect.x,
+                            y: targetCellUI.rect.y,
+                            duration: 300,
+                            ease: 'Cubic.out',
+                            onComplete: () => {
+                                tempOrb.destroy();
+                                r();
+                            }
+                        });
+                    }));
+                });
+
+                // Clear the exploding cell immediately
+                this.updateCellOrbs(exp.x, exp.y);
             });
 
-            // Update all cells to the state after this wave
-            this.time.delayedCall(150, () => {
-                for (let i = 0; i < this.engine.cells.length; i++) {
-                    const x = i % this.gridConfig.width;
-                    const y = Math.floor(i / this.gridConfig.width);
-                    this.updateCellOrbs(x, y);
-                }
-            });
-
-            Promise.all(explosionAnims).then(() => {
-                this.time.delayedCall(200, resolve); // Brief pause between waves
-            });
+            if (moveAnims.length === 0) {
+                resolve();
+            } else {
+                Promise.all(moveAnims).then(() => {
+                    // Update all cells to catch final state
+                    for (let i = 0; i < this.engine.cells.length; i++) {
+                        const x = i % width;
+                        const y = Math.floor(i / width);
+                        this.updateCellOrbs(x, y);
+                    }
+                    this.time.delayedCall(100, resolve);
+                });
+            }
         });
     }
 

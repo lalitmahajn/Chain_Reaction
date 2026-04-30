@@ -41,15 +41,16 @@ function showScreen(name) {
 function updatePlayerListUI(players) {
     playerListUI.innerHTML = '';
     playerCountUI.innerText = players.length;
+    const localPeerId = networkRole.peerManager.peer.id;
+    
     players.forEach(p => {
+        const isYou = p.peerId === localPeerId;
         const li = document.createElement('li');
         li.className = 'player-item';
         li.innerHTML = `
-            <span>
-                <span class="player-color-dot" style="background-color: #${p.color.toString(16).padStart(6, '0')}"></span>
-                ${p.name}
-            </span>
-            ${p.id === 1 ? '<small>(Host)</small>' : ''}
+            ${isYou ? '<span class="you-badge">YOU</span>' : ''}
+            <div class="player-color-dot" style="background-color: #${p.color.toString(16).padStart(6, '0')}; color: #${p.color.toString(16).padStart(6, '0')}"></div>
+            <div class="player-name">${p.name} ${p.id === 1 ? '<br><small>(Host)</small>' : ''}</div>
         `;
         playerListUI.appendChild(li);
     });
