@@ -5,6 +5,8 @@ export class GameHost {
         this.roomName = roomName;
         this.callbacks = callbacks; // { onPlayerJoined, onMoveReceived, onStart }
         this.players = []; // [{ peerId, name, color, id }]
+        this.gameStarted = false;
+        this.currentGridConfig = null;
         this.peerManager = new PeerManager(
             this.handleNewConnection.bind(this),
             this.handleData.bind(this),
@@ -30,6 +32,14 @@ export class GameHost {
         switch (data.type) {
             case 'JOIN':
                 this.addPlayer(peerId, data.name);
+                if (this.gameStarted) {
+                    // Tell this specific player to start
+                    this.peerManager.sendTo(peerId, {
+                        type: 'START_GAME',
+                        gridConfig: this.currentGridConfig,
+                        players: this.players
+                    });
+                }
                 break;
             case 'REQUEST_MOVE':
                 if (this.callbacks.onMoveReceived) {
@@ -75,6 +85,8 @@ export class GameHost {
     }
 
     startGame(gridConfig) {
+        this.gameStarted = true;
+        this.currentGridConfig = gridConfig;
         this.peerManager.broadcast({
             type: 'START_GAME',
             gridConfig,
