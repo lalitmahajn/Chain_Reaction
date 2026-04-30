@@ -214,8 +214,9 @@ export default class GameScene extends Phaser.Scene {
                             targets: tempOrb,
                             x: targetCellUI.rect.x,
                             y: targetCellUI.rect.y,
-                            duration: 300,
-                            ease: 'Cubic.out',
+                            duration: 350,
+                            ease: 'Back.easeOut',
+                            easeParams: [1.5],
                             onComplete: () => {
                                 tempOrb.destroy();
                                 r();

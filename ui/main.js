@@ -11,6 +11,7 @@ const config = {
     width: window.innerWidth,
     height: window.innerHeight,
     backgroundColor: '#0f172a',
+    transparent: true,
     scene: [] 
 };
 

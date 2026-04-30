@@ -15,7 +15,7 @@
 }
 
 body {
-    background-color: var(--bg-color);
+    background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
     color: var(--text-color);
     font-family: var(--font-main);
     overflow: hidden;
@@ -23,14 +23,33 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    position: relative;
+}
+
+body::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-image: 
+        linear-gradient(rgba(56, 189, 248, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index: -1;
+    animation: grid-move 20s linear infinite;
+}
+
+@keyframes grid-move {
+    from { background-position: 0 0; }
+    to { background-position: 0 40px; }
 }
 
 #game-container {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    z-index: 1;
 }
 
 #ui-layer {
@@ -39,7 +58,8 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    pointer-events: none; /* Let clicks pass through unless on interactive elements */
+    pointer-events: none;
+    z-index: 2;
     display: flex;
     justify-content: center;
     align-items: center;
