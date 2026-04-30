@@ -15,10 +15,10 @@ export class GameHost {
         this.colorPalette = [0xef4444, 0x06b6d4, 0x22c55e, 0xeab308, 0xa855f7, 0xf97316, 0xec4899, 0x64748b];
     }
 
-    async start() {
+    async start(hostName = "Host") {
         await this.peerManager.init(this.roomName);
         // Host is always Player 1
-        this.addPlayer(this.peerManager.peer.id, "Host", true);
+        this.addPlayer(this.peerManager.peer.id, hostName, true);
     }
 
     handleNewConnection(conn) {

@@ -2,40 +2,42 @@ import GameScene from './gameScene.js';
 import { GameHost } from '../network/host.js';
 import { GameClient } from '../network/client.js';
 
+let game;
+let networkRole = null;
+
 const config = {
     type: Phaser.AUTO,
     parent: 'game-container',
     width: window.innerWidth,
     height: window.innerHeight,
     backgroundColor: '#0f172a',
-    scene: [] // Start scenes manually to avoid double-init
+    scene: [] 
 };
 
-let game;
-let networkRole; // Host or Client object
-
-// DOM Elements
+// UI Elements
 const screens = {
     menu: document.getElementById('menu-screen'),
     lobby: document.getElementById('lobby-screen'),
     game: document.getElementById('game-ui')
 };
 
-const buttons = {
-    host: document.getElementById('host-btn'),
-    join: document.getElementById('join-btn'),
-    start: document.getElementById('start-game-btn')
-};
+const nameInput = document.getElementById('player-name');
+const roomInput = document.getElementById('room-name');
+const joinRoomInput = document.getElementById('join-room-name');
+const hostBtn = document.getElementById('host-btn');
+const joinBtn = document.getElementById('join-btn');
+const startBtn = document.getElementById('start-game-btn');
 
 const playerListUI = document.getElementById('player-list');
 const playerCountUI = document.getElementById('player-count');
 
-// Helper to switch screens
-function showScreen(name) {
-    Object.keys(screens).forEach(key => {
-        screens[key].classList.remove('active');
-    });
-    screens[name].classList.add('active');
+// Load saved name
+const savedName = localStorage.getItem('cr-player-name');
+if (savedName) nameInput.value = savedName;
+
+function showScreen(screenId) {
+    Object.values(screens).forEach(s => s.classList.remove('active'));
+    screens[screenId].classList.add('active');
 }
 
 function updatePlayerListUI(players) {
@@ -64,8 +66,6 @@ const onStartGame = (gridConfig, players) => {
 
     showScreen('game');
     game = new Phaser.Game(config);
-    
-    // Add scene manually
     game.scene.add('GameScene', GameScene);
 
     game.events.once('ready', () => {
@@ -83,7 +83,6 @@ const onStartGame = (gridConfig, players) => {
             }
         });
 
-        // Listen for moves/rejections from network
         if (!isHost) {
             networkRole.callbacks.onMove = (x, y, playerId) => {
                 const scene = game.scene.getScene('GameScene');
@@ -98,68 +97,64 @@ const onStartGame = (gridConfig, players) => {
 };
 
 const handleHostMoveRequest = (peerId, x, y) => {
-    console.log("Host: Received move request from", peerId, { x, y });
     const scene = game.scene.getScene('GameScene');
-    if (!scene || !scene.engine) {
-        console.warn("Host: Scene or Engine not ready");
-        return;
-    }
-
+    if (!scene) return;
+    
     const player = networkRole.players.find(p => p.peerId === peerId);
-    if (!player) {
-        console.warn("Host: Player not found for peerId", peerId);
-        return;
-    }
+    if (!player) return;
 
     if (scene.engine.isValidMove(x, y, player.id)) {
-        console.log("Host: Move valid, broadcasting to all");
         networkRole.broadcastMove(x, y, player.id);
         scene.events.emit('remote-move', { x, y, playerId: player.id });
     } else {
-        console.warn("Host: Invalid move attempt", { x, y, player: player.name });
         networkRole.rejectMove(peerId);
     }
 };
 
-// Button Actions
-buttons.host.onclick = async () => {
-    const name = document.getElementById('room-name').value || 'MyRoom';
-    document.getElementById('display-room-name').innerText = name;
+// Event Listeners
+hostBtn.addEventListener('click', async () => {
+    const roomName = roomInput.value.trim();
+    const playerName = nameInput.value.trim() || 'Host';
+    if (!roomName) return alert('Enter room name');
     
-    networkRole = new GameHost(name, {
+    localStorage.setItem('cr-player-name', playerName);
+    document.getElementById('display-room-name').innerText = roomName;
+    
+    networkRole = new GameHost(roomName, {
         onPlayerJoined: (players) => updatePlayerListUI(players),
         onMoveReceived: (peerId, x, y) => handleHostMoveRequest(peerId, x, y),
         onStart: onStartGame
     });
 
-    await networkRole.start();
+    await networkRole.start(playerName);
     showScreen('lobby');
     document.getElementById('host-controls').classList.remove('hidden');
     document.getElementById('waiting-msg').classList.add('hidden');
-};
+});
 
-buttons.join.onclick = async () => {
-    const roomName = document.getElementById('join-room-name').value;
-    if (!roomName) return alert("Please enter a Room ID");
-
+joinBtn.addEventListener('click', async () => {
+    const roomName = joinRoomInput.value.trim();
+    const playerName = nameInput.value.trim() || 'Guest';
+    if (!roomName) return alert('Enter Room ID');
+    
+    localStorage.setItem('cr-player-name', playerName);
+    document.getElementById('display-room-name').innerText = roomName;
+    
     networkRole = new GameClient({
         onPlayerList: (players) => updatePlayerListUI(players),
         onStart: onStartGame,
-        onMove: (x, y, playerId) => {
-            // This is handled in onStartGame for the scene reference
+        onMove: (x, y, pid) => {
+             // This will be set properly in onStartGame
         }
     });
 
-    await networkRole.join(roomName, "Guest " + Math.floor(Math.random() * 1000));
+    await networkRole.join(roomName, playerName);
     showScreen('lobby');
-};
+});
 
-buttons.start.onclick = () => {
-    const gridConfigStr = document.getElementById('grid-config').value;
-    const [w, h] = gridConfigStr.split('x').map(Number);
-    networkRole.startGame({ width: w, height: h });
-};
-
-window.addEventListener('resize', () => {
-    if (game) game.scale.resize(window.innerWidth, window.innerHeight);
+startBtn.addEventListener('click', () => {
+    if (networkRole && networkRole.broadcastMove) {
+        const [w, h] = document.getElementById('grid-config').value.split('x').map(Number);
+        networkRole.startGame(w, h);
+    }
 });
