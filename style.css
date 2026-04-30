@@ -215,6 +215,54 @@ input:focus {
     letter-spacing: 2px;
 }
 
+#player-stats {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+    width: 100%;
+}
+
+.player-stat-item {
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(5px);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s;
+}
+
+.player-stat-item.current {
+    border-color: currentColor;
+    box-shadow: 0 0 10px currentColor;
+    transform: scale(1.1);
+}
+
+.player-stat-item.eliminated {
+    opacity: 0.3;
+    filter: grayscale(1);
+    text-decoration: line-through;
+}
+
+.stat-color {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.stat-count {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
 .hidden {
     display: none;
 }

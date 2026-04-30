@@ -8,7 +8,9 @@ export default class GameScene extends Phaser.Scene {
     }
 
     init(data) {
+        this.setupAudio();
         this.gridConfig = data.gridConfig || { width: 6, height: 9 };
+
         this.players = data.players || [
             { id: 1, name: 'Player 1', color: 0xff0000 },
             { id: 2, name: 'Player 2', color: 0x00ff00 }
@@ -20,12 +22,14 @@ export default class GameScene extends Phaser.Scene {
         
         // UI references
         this.turnIndicator = document.getElementById('turn-indicator');
+        this.playerStatsUI = document.getElementById('player-stats');
     }
 
     create() {
         this.createFlareTexture();
         this.createGrid();
         this.updateTurnIndicator();
+        this.updatePlayerStats();
         this.isAnimating = false;
         
         // Event listener for moves coming from network
@@ -103,6 +107,7 @@ export default class GameScene extends Phaser.Scene {
         const result = this.engine.applyMove(x, y, playerId);
         if (!result) return;
 
+        this.playSound('move');
         this.animateMove(result);
     }
 
@@ -119,6 +124,7 @@ export default class GameScene extends Phaser.Scene {
 
         this.isAnimating = false;
         this.updateTurnIndicator();
+        this.updatePlayerStats();
 
         if (result.winner) {
             this.handleGameOver(result.winner);
@@ -195,6 +201,7 @@ export default class GameScene extends Phaser.Scene {
 
                 // Screen shake
                 this.cameras.main.shake(100, 0.005);
+                this.playSound('pop');
 
                 // Create sliding orbs
                 neighbors.forEach(n => {
@@ -244,13 +251,87 @@ export default class GameScene extends Phaser.Scene {
         this.turnIndicator.style.color = `#${player.color.toString(16).padStart(6, '0')}`;
     }
 
+    updatePlayerStats() {
+        if (!this.playerStatsUI) return;
+        this.playerStatsUI.innerHTML = '';
+        
+        this.players.forEach(p => {
+            const orbCount = this.engine.getPlayerOrbCount(p.id);
+            const isEliminated = this.engine.hasMovedOnce.has(p.id) && orbCount === 0;
+            const isCurrent = this.engine.getCurrentPlayer().id === p.id;
+            
+            const div = document.createElement('div');
+            div.className = `player-stat-item ${isEliminated ? 'eliminated' : ''} ${isCurrent ? 'current' : ''}`;
+            div.style.color = `#${p.color.toString(16).padStart(6, '0')}`;
+            div.innerHTML = `
+                <span class="stat-color" style="background-color: #${p.color.toString(16).padStart(6, '0')}"></span>
+                <span class="stat-name">${p.name}</span>
+                <span class="stat-count">${orbCount}</span>
+            `;
+            this.playerStatsUI.appendChild(div);
+        });
+    }
+
+    setupAudio() {
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    playSound(type) {
+        if (!this.audioCtx) return;
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(this.audioCtx.destination);
+
+        const now = this.audioCtx.currentTime;
+
+        if (type === 'move') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(440, now);
+            osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+            osc.start(now);
+            osc.stop(now + 0.1);
+        } else if (type === 'pop') {
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(150, now);
+            osc.frequency.exponentialRampToValueAtTime(40, now + 0.15);
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+            osc.start(now);
+            osc.stop(now + 0.15);
+        }
+    }
+
     handleGameOver(winner) {
         this.turnIndicator.innerText = `${winner.name} WINS!`;
-        this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, `${winner.name.toUpperCase()} WINS!`, {
-            fontSize: '48px',
+        
+        const winText = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY - 50, `${winner.name.toUpperCase()} WINS!`, {
+            fontSize: '64px',
             fontFamily: 'Inter',
-            fontWeight: 'bold',
+            fontWeight: '900',
             fill: `#${winner.color.toString(16).padStart(6, '0')}`
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setStroke('#000', 8).setShadow(0, 0, 20, `#${winner.color.toString(16).padStart(6, '0')}`, true, true);
+
+        // Pulsing win text
+        this.tweens.add({
+            targets: winText,
+            scale: 1.1,
+            duration: 500,
+            yoyo: true,
+            repeat: -1
+        });
+
+        // Rematch button (DOM)
+        const btn = document.createElement('button');
+        btn.innerText = 'Back to Lobby';
+        btn.className = 'btn-primary';
+        btn.style.position = 'absolute';
+        btn.style.top = '70%';
+        btn.style.left = '50%';
+        btn.style.transform = 'translate(-50%, -50%)';
+        btn.onclick = () => location.reload(); // Simplest way to reset for now
+        document.body.appendChild(btn);
     }
 }
