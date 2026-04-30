@@ -73,4 +73,12 @@ export class PeerManager {
         const conn = this.connections.get(peerId);
         if (conn) conn.send(data);
     }
+
+    disconnectPeer(peerId) {
+        const conn = this.connections.get(peerId);
+        if (conn) {
+            conn.close();
+            this.connections.delete(peerId);
+        }
+    }
 }

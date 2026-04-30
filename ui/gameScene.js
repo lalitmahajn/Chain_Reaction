@@ -3,8 +3,7 @@ import { GameEngine } from '../game/engine.js';
 export default class GameScene extends Phaser.Scene {
     constructor() {
         super('GameScene');
-        this.cellSize = 60;
-        this.padding = 40;
+        this.padding = 16;
     }
 
     init(data) {
@@ -18,24 +17,103 @@ export default class GameScene extends Phaser.Scene {
         this.isHost = data.isHost;
         this.localPlayerId = data.localPlayerId;
         this.engine = new GameEngine(this.gridConfig.width, this.gridConfig.height, this.players);
+        
+        if (data.gameState) {
+            this.engine.setState(data.gameState);
+        }
+
         this.onMoveRequested = data.onMoveRequested; // Callback for networking
+        this.onKickRequested = data.onKickRequested; // Callback for host to kick
         
         // UI references
         this.turnIndicator = document.getElementById('turn-indicator');
         this.playerStatsUI = document.getElementById('player-stats');
+
+        // Calculate dynamic cell size based on viewport
+        this.calculateCellSize();
+    }
+
+    calculateCellSize() {
+        const { width, height } = this.gridConfig;
+        const camW = this.cameras.main.width;
+        const camH = this.cameras.main.height;
+
+        // Reserve space for the game-ui header (turn indicator + player stats)
+        const isMobile = camW < 600;
+        const uiHeaderHeight = isMobile ? 60 : 80;
+        const bottomPadding = this.padding;
+
+        const availableWidth = camW - (this.padding * 2);
+        const availableHeight = camH - uiHeaderHeight - bottomPadding;
+
+        // Pick the largest cell that fits both dimensions
+        const maxCellW = Math.floor(availableWidth / width);
+        const maxCellH = Math.floor(availableHeight / height);
+        this.cellSize = Math.min(maxCellW, maxCellH);
+
+        // Clamp to a reasonable range
+        this.cellSize = Math.max(24, Math.min(this.cellSize, 80));
+
+        // Store the header height for grid offset
+        this.uiHeaderHeight = uiHeaderHeight;
     }
 
     create() {
         this.createFlareTexture();
         this.createGrid();
+        this.refreshBoard();
         this.updateTurnIndicator();
         this.updatePlayerStats();
         this.isAnimating = false;
         
         // Event listener for moves coming from network
         this.events.on('remote-move', (move) => {
-            this.handleMove(move.x, move.y, move.playerId);
+            this.handleMove(move.x, move.y, move.playerId, move.nextTurnIndex);
         });
+
+        // Handle window resize
+        this.scale.on('resize', this.onResize, this);
+    }
+
+    onResize() {
+        this.calculateCellSize();
+        this.repositionGrid();
+    }
+
+    repositionGrid() {
+        const { width, height } = this.gridConfig;
+        const gridPixelW = width * this.cellSize;
+        const gridPixelH = height * this.cellSize;
+
+        const startX = (this.cameras.main.width - gridPixelW) / 2;
+        const availableBelow = this.cameras.main.height - this.uiHeaderHeight - this.padding;
+        const startY = this.uiHeaderHeight + (availableBelow - gridPixelH) / 2;
+        const gap = Math.max(2, Math.round(this.cellSize * 0.06));
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const index = y * width + x;
+                const cellUI = this.cells[index];
+                const posX = startX + x * this.cellSize + this.cellSize / 2;
+                const posY = startY + y * this.cellSize + this.cellSize / 2;
+
+                cellUI.rect.setPosition(posX, posY);
+                cellUI.rect.setSize(this.cellSize - gap, this.cellSize - gap);
+                cellUI.orbContainer.setPosition(posX, posY);
+                
+                // Refresh orbs in this cell to update their positions/sizes
+                this.updateCellOrbs(x, y);
+            }
+        }
+    }
+
+    refreshBoard() {
+        const { width, height } = this.gridConfig;
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                this.updateCellOrbs(x, y);
+            }
+        }
     }
 
     createFlareTexture() {
@@ -48,9 +126,17 @@ export default class GameScene extends Phaser.Scene {
     createGrid() {
         const { width, height } = this.gridConfig;
         this.cells = [];
-        
-        const startX = (this.cameras.main.width - (width * this.cellSize)) / 2;
-        const startY = (this.cameras.main.height - (height * this.cellSize)) / 2;
+
+        const gridPixelW = width * this.cellSize;
+        const gridPixelH = height * this.cellSize;
+
+        // Center horizontally, and position below the UI header vertically
+        const startX = (this.cameras.main.width - gridPixelW) / 2;
+        const availableBelow = this.cameras.main.height - this.uiHeaderHeight - this.padding;
+        const startY = this.uiHeaderHeight + (availableBelow - gridPixelH) / 2;
+
+        // Gap between cells scales with cell size
+        const gap = Math.max(2, Math.round(this.cellSize * 0.06));
 
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
@@ -58,7 +144,7 @@ export default class GameScene extends Phaser.Scene {
                 const posY = startY + y * this.cellSize + this.cellSize / 2;
 
                 // Cell background
-                const rect = this.add.rectangle(posX, posY, this.cellSize - 4, this.cellSize - 4, 0x1e293b)
+                const rect = this.add.rectangle(posX, posY, this.cellSize - gap, this.cellSize - gap, 0x1e293b)
                     .setStrokeStyle(1, 0x334155)
                     .setInteractive();
 
@@ -101,10 +187,10 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
-    handleMove(x, y, playerId) {
+    handleMove(x, y, playerId, nextTurnIndex = null) {
         if (!this.engine.isValidMove(x, y, playerId)) return;
 
-        const result = this.engine.applyMove(x, y, playerId);
+        const result = this.engine.applyMove(x, y, playerId, nextTurnIndex);
         if (!result) return;
 
         this.playSound('move');
@@ -140,10 +226,13 @@ export default class GameScene extends Phaser.Scene {
         const player = this.players.find(p => p.id === cellData.owner);
         const color = player ? player.color : 0xffffff;
 
+        const orbRadius = Math.max(4, Math.round(this.cellSize * 0.14));
+        const orbStroke = Math.max(1, Math.round(this.cellSize * 0.035));
+
         for (let i = 0; i < cellData.count; i++) {
             const offset = this.getOrbOffset(i, cellData.count);
-            const orb = this.add.circle(offset.x, offset.y, 8, color);
-            orb.setStrokeStyle(2, 0xffffff, 0.5);
+            const orb = this.add.circle(offset.x, offset.y, orbRadius, color);
+            orb.setStrokeStyle(orbStroke, 0xffffff, 0.5);
             
             // Pulsing animation
             this.tweens.add({
@@ -174,11 +263,13 @@ export default class GameScene extends Phaser.Scene {
     }
 
     getOrbOffset(index, total) {
+        const spread = Math.max(6, Math.round(this.cellSize * 0.2));
+        const triSpread = Math.max(7, Math.round(this.cellSize * 0.24));
         if (total === 1) return { x: 0, y: 0 };
-        if (total === 2) return { x: index === 0 ? -12 : 12, y: 0 };
+        if (total === 2) return { x: index === 0 ? -spread : spread, y: 0 };
         if (total === 3) {
             const angle = (index * 120 - 90) * (Math.PI / 180);
-            return { x: Math.cos(angle) * 14, y: Math.sin(angle) * 14 };
+            return { x: Math.cos(angle) * triSpread, y: Math.sin(angle) * triSpread };
         }
         return { x: 0, y: 0 };
     }
@@ -206,8 +297,10 @@ export default class GameScene extends Phaser.Scene {
                 // Create sliding orbs
                 neighbors.forEach(n => {
                     const targetCellUI = this.cells[n.y * width + n.x];
-                    const tempOrb = this.add.circle(cellUI.rect.x, cellUI.rect.y, 8, player.color);
-                    tempOrb.setStrokeStyle(2, 0xffffff, 0.5);
+                    const orbR = Math.max(4, Math.round(this.cellSize * 0.14));
+                    const orbS = Math.max(1, Math.round(this.cellSize * 0.035));
+                    const tempOrb = this.add.circle(cellUI.rect.x, cellUI.rect.y, orbR, player.color);
+                    tempOrb.setStrokeStyle(orbS, 0xffffff, 0.5);
                     
                     moveAnims.push(new Promise(r => {
                         this.tweens.add({
@@ -254,22 +347,61 @@ export default class GameScene extends Phaser.Scene {
 
     updatePlayerStats() {
         if (!this.playerStatsUI) return;
-        this.playerStatsUI.innerHTML = '';
         
-        this.players.forEach(p => {
+        const sideLeft = document.getElementById('side-stats-left');
+        const sideRight = document.getElementById('side-stats-right');
+        
+        this.playerStatsUI.innerHTML = '';
+        if (sideLeft) sideLeft.innerHTML = '';
+        if (sideRight) sideRight.innerHTML = '';
+        
+        const midPoint = Math.ceil(this.players.length / 2);
+
+        this.players.forEach((p, index) => {
             const orbCount = this.engine.getPlayerOrbCount(p.id);
             const isEliminated = this.engine.hasMovedOnce.has(p.id) && orbCount === 0;
             const isCurrent = this.engine.getCurrentPlayer().id === p.id;
             
-            const div = document.createElement('div');
-            div.className = `player-stat-item ${isEliminated ? 'eliminated' : ''} ${isCurrent ? 'current' : ''}`;
-            div.style.color = `#${p.color.toString(16).padStart(6, '0')}`;
-            div.innerHTML = `
-                <span class="stat-color" style="background-color: #${p.color.toString(16).padStart(6, '0')}"></span>
-                <span class="stat-name">${p.name}</span>
-                <span class="stat-count">${orbCount}</span>
-            `;
-            this.playerStatsUI.appendChild(div);
+            const createStatItem = () => {
+                const div = document.createElement('div');
+                const isOff = p.disconnected;
+                div.className = `player-stat-item ${isEliminated ? 'eliminated' : ''} ${isCurrent ? 'current' : ''} ${isOff ? 'offline' : ''}`;
+                div.style.color = `#${p.color.toString(16).padStart(6, '0')}`;
+                
+                let kickBtn = '';
+                if (this.isHost && p.id !== this.localPlayerId) {
+                    kickBtn = `<button class="kick-btn" title="Kick Player" data-id="${p.id}">×</button>`;
+                }
+
+                div.innerHTML = `
+                    <span class="stat-color" style="background-color: #${p.color.toString(16).padStart(6, '0')}"></span>
+                    <span class="stat-name">${p.name}${isOff ? ' <small>(Off)</small>' : ''}</span>
+                    <span class="stat-count">${orbCount}</span>
+                    ${kickBtn}
+                `;
+
+                if (kickBtn) {
+                    const btn = div.querySelector('.kick-btn');
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Kick ${p.name}?`)) {
+                            this.onKickRequested(p.id);
+                        }
+                    });
+                }
+
+                return div;
+            };
+
+            // Add to top list (mobile)
+            this.playerStatsUI.appendChild(createStatItem());
+
+            // Add to side lists (desktop)
+            if (index < midPoint) {
+                if (sideLeft) sideLeft.appendChild(createStatItem());
+            } else {
+                if (sideRight) sideRight.appendChild(createStatItem());
+            }
         });
     }
 
@@ -308,8 +440,11 @@ export default class GameScene extends Phaser.Scene {
     handleGameOver(winner) {
         this.turnIndicator.innerText = `${winner.name} WINS!`;
         
+        const isMobile = this.cameras.main.width < 600;
+        const fontSize = isMobile ? '32px' : '64px';
+
         const winText = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY - 50, `${winner.name.toUpperCase()} WINS!`, {
-            fontSize: '64px',
+            fontSize: fontSize,
             fontFamily: 'Inter',
             fontWeight: '900',
             fill: `#${winner.color.toString(16).padStart(6, '0')}`
@@ -332,7 +467,24 @@ export default class GameScene extends Phaser.Scene {
         btn.style.top = '70%';
         btn.style.left = '50%';
         btn.style.transform = 'translate(-50%, -50%)';
-        btn.onclick = () => location.reload(); // Simplest way to reset for now
-        document.body.appendChild(btn);
+        btn.style.zIndex = '10';
+        btn.style.pointerEvents = 'auto';
+        btn.onclick = () => location.reload();
+        document.getElementById('ui-layer').appendChild(btn);
+    }
+
+    removePlayer(playerId) {
+        const winner = this.engine.removePlayer(playerId);
+        
+        // Refresh all cells to clear removed player's orbs
+        this.refreshBoard();
+        
+        // Refresh UI
+        this.updatePlayerStats();
+        this.updateTurnIndicator();
+
+        if (winner) {
+            this.handleGameOver(winner);
+        }
     }
 }

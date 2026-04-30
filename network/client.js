@@ -31,10 +31,13 @@ export class GameClient {
                 if (this.callbacks.onPlayerList) this.callbacks.onPlayerList(data.players);
                 break;
             case 'START_GAME':
-                if (this.callbacks.onStart) this.callbacks.onStart(data.gridConfig, data.players);
+                if (this.callbacks.onStart) this.callbacks.onStart(data.gridConfig, data.players, data.gameState);
                 break;
             case 'MOVE':
-                if (this.callbacks.onMove) this.callbacks.onMove(data.x, data.y, data.playerId);
+                if (this.callbacks.onMove) this.callbacks.onMove(data.x, data.y, data.playerId, data.nextTurnIndex);
+                break;
+            case 'PLAYER_KICKED':
+                if (this.callbacks.onPlayerKicked) this.callbacks.onPlayerKicked(data.playerId);
                 break;
             case 'REJECT_MOVE':
                 if (this.callbacks.onReject) this.callbacks.onReject();

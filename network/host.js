@@ -33,11 +33,12 @@ export class GameHost {
             case 'JOIN':
                 this.addPlayer(peerId, data.name);
                 if (this.gameStarted) {
-                    // Tell this specific player to start
+                    // Tell this specific player to start and provide current state
                     this.peerManager.sendTo(peerId, {
                         type: 'START_GAME',
                         gridConfig: this.currentGridConfig,
-                        players: this.players
+                        players: this.players,
+                        gameState: this.callbacks.onSyncRequested ? this.callbacks.onSyncRequested() : null
                     });
                 }
                 break;
@@ -50,7 +51,17 @@ export class GameHost {
     }
 
     handleDisconnect(peerId) {
-        this.players = this.players.filter(p => p.peerId !== peerId);
+        const player = this.players.find(p => p.peerId === peerId);
+        if (!player) return;
+
+        if (!this.gameStarted) {
+            // Remove player if game hasn't started yet
+            this.players = this.players.filter(p => p.peerId !== peerId);
+        } else {
+            // Mark as disconnected if game is in progress
+            player.disconnected = true;
+        }
+
         this.broadcastPlayerList();
         if (this.callbacks.onPlayerJoined) {
             this.callbacks.onPlayerJoined(this.players);
@@ -58,16 +69,26 @@ export class GameHost {
     }
 
     addPlayer(peerId, name, isHost = false) {
-        if (this.players.length >= 8) return;
+        // Check if this player is rejoining
+        const existingPlayer = this.players.find(p => p.name === name);
+        
+        if (existingPlayer) {
+            existingPlayer.peerId = peerId;
+            existingPlayer.disconnected = false;
+        } else {
+            // DO NOT add new players if game is already in progress
+            if (this.gameStarted) return;
 
-        const player = {
-            peerId,
-            name,
-            id: this.players.length + 1,
-            color: this.colorPalette[this.players.length]
-        };
-
-        this.players.push(player);
+            if (this.players.length >= 8) return;
+            const player = {
+                peerId,
+                name,
+                id: this.players.length + 1,
+                color: this.colorPalette[this.players.length],
+                disconnected: false
+            };
+            this.players.push(player);
+        }
         
         // Broadcast new player list to everyone
         this.broadcastPlayerList();
@@ -97,11 +118,34 @@ export class GameHost {
         }
     }
 
-    broadcastMove(x, y, playerId) {
+    broadcastMove(x, y, playerId, nextTurnIndex) {
         this.peerManager.broadcast({
             type: 'MOVE',
-            x, y, playerId
+            x, y, playerId, nextTurnIndex
         });
+    }
+
+    kickPlayer(playerId) {
+        const player = this.players.find(p => p.id === playerId);
+        if (!player) return;
+
+        // Close connection
+        this.peerManager.disconnectPeer(player.peerId);
+        
+        // Broadcast kick to everyone else
+        this.peerManager.broadcast({
+            type: 'PLAYER_KICKED',
+            playerId: playerId
+        });
+
+        // Remove locally
+        this.players = this.players.filter(p => p.id !== playerId);
+        
+        this.broadcastPlayerList();
+        
+        if (this.callbacks.onPlayerKicked) {
+            this.callbacks.onPlayerKicked(playerId);
+        }
     }
 
     rejectMove(peerId) {

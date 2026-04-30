@@ -44,7 +44,7 @@ export class GameEngine {
         return cell.owner === null || cell.owner === playerId;
     }
 
-    applyMove(x, y, playerId) {
+    applyMove(x, y, playerId, forcedNextTurnIndex = null) {
         if (!this.isValidMove(x, y, playerId)) return null;
 
         const cell = this.getCell(x, y);
@@ -54,13 +54,19 @@ export class GameEngine {
 
         const reactionSteps = this.resolveChainReactions(playerId);
         
-        this.nextTurn();
+        if (forcedNextTurnIndex !== null) {
+            this.turnIndex = forcedNextTurnIndex;
+        } else {
+            this.nextTurn();
+        }
+
         const winner = this.checkWinner();
         
         return {
             move: { x, y, playerId },
             reactionSteps,
-            winner
+            winner,
+            nextTurnIndex: this.turnIndex
         };
     }
 
@@ -167,5 +173,50 @@ export class GameEngine {
 
     getCurrentPlayer() {
         return this.players[this.turnIndex];
+    }
+
+    getState() {
+        return {
+            cells: JSON.parse(JSON.stringify(this.cells)),
+            turnIndex: this.turnIndex,
+            hasMovedOnce: Array.from(this.hasMovedOnce),
+            isGameOver: this.isGameOver
+        };
+    }
+
+    setState(state) {
+        this.cells = state.cells;
+        this.turnIndex = state.turnIndex;
+        this.hasMovedOnce = new Set(state.hasMovedOnce);
+        this.isGameOver = state.isGameOver;
+    }
+
+    removePlayer(playerId) {
+        // 1. Remove their orbs
+        this.cells.forEach(cell => {
+            if (cell.owner === playerId) {
+                cell.owner = null;
+                cell.count = 0;
+            }
+        });
+
+        // 2. Remove from player list
+        const index = this.players.findIndex(p => p.id === playerId);
+        if (index === -1) return;
+        
+        this.players.splice(index, 1);
+
+        // 3. Adjust turn index if needed
+        if (this.turnIndex >= index) {
+            this.turnIndex = Math.max(0, this.turnIndex - 1);
+        }
+        
+        // Ensure turn index is valid
+        if (this.players.length > 0) {
+            this.turnIndex = this.turnIndex % this.players.length;
+        }
+
+        // 4. Check for winner
+        return this.checkWinner();
     }
 }

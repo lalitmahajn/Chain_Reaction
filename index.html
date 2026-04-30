@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Chain Reaction | Multiplayer</title>
     <link rel="stylesheet" href="style.css">
     <!-- Phaser 3 -->
@@ -17,16 +17,24 @@
     <div id="ui-layer">
         <div id="menu-screen" class="screen active">
             <h1>CHAIN REACTION</h1>
-            <div class="menu-actions">
+            
+            <div class="menu-container">
                 <div class="input-group">
-                    <input type="text" id="player-name" placeholder="Enter Name..." maxlength="12">
-                    <input type="text" id="room-name" placeholder="Enter Room Name...">
-                    <button id="host-btn" class="btn-primary">Host Game</button>
+                    <label>Your Name</label>
+                    <input type="text" id="player-name" placeholder="Enter your name..." maxlength="12">
                 </div>
-                <div class="divider">OR</div>
-                <div class="input-group">
-                    <input type="text" id="join-room-name" placeholder="Enter Room ID to Join...">
-                    <button id="join-btn" class="btn-secondary">Join Game</button>
+
+                <div class="mode-selector">
+                    <button id="mode-host-btn" class="btn-outline">Host</button>
+                    <button id="mode-join-btn" class="btn-outline">Join</button>
+                </div>
+
+                <div id="room-input-container" class="hidden">
+                    <div class="input-group">
+                        <label id="room-label">Room Name</label>
+                        <input type="text" id="room-input" placeholder="Enter room ID...">
+                    </div>
+                    <button id="confirm-btn" class="btn-primary">Go!</button>
                 </div>
             </div>
         </div>
@@ -52,6 +60,9 @@
         </div>
         
         <div id="game-ui" class="screen">
+            <div id="room-code-display">Room: <span>---</span></div>
+            <div id="side-stats-left" class="side-stats"></div>
+            <div id="side-stats-right" class="side-stats"></div>
             <div id="turn-indicator">Player's Turn</div>
             <div id="player-stats"></div>
         </div>
