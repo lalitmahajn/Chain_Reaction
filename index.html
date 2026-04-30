@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chain Reaction | Multiplayer</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Phaser 3 -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <!-- PeerJS -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+    <div id="game-container"></div>
+    
+    <!-- UI Overlay for Lobby and Menus -->
+    <div id="ui-layer">
+        <div id="menu-screen" class="screen active">
+            <h1>CHAIN REACTION</h1>
+            <div class="menu-actions">
+                <div class="input-group">
+                    <input type="text" id="room-name" placeholder="Enter Room Name...">
+                    <button id="host-btn" class="btn-primary">Host Game</button>
+                </div>
+                <div class="divider">OR</div>
+                <div class="input-group">
+                    <input type="text" id="join-room-name" placeholder="Enter Room ID to Join...">
+                    <button id="join-btn" class="btn-secondary">Join Game</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="lobby-screen" class="screen">
+            <h2>Lobby: <span id="display-room-name">---</span></h2>
+            <div id="player-list-container">
+                <h3>Players (<span id="player-count">0</span>/8)</h3>
+                <ul id="player-list"></ul>
+            </div>
+            <div id="host-controls" class="hidden">
+                <div class="config-row">
+                    <label>Grid Size:</label>
+                    <select id="grid-config">
+                        <option value="6x9">6 x 9 (Classic)</option>
+                        <option value="10x15">10 x 15 (Large)</option>
+                        <option value="5x5">5 x 5 (Small)</option>
+                    </select>
+                </div>
+                <button id="start-game-btn" class="btn-primary">Start Game</button>
+            </div>
+            <div id="waiting-msg">Waiting for host to start...</div>
+        </div>
+        
+        <div id="game-ui" class="screen">
+            <div id="turn-indicator">Player's Turn</div>
+            <div id="player-stats"></div>
+        </div>
+    </div>
+
+    <!-- Main Game Script -->
+    <script type="module" src="ui/main.js"></script>
+</body>
+</html>
