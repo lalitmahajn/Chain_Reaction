@@ -42,7 +42,17 @@ export class GameClient {
             case 'REJECT_MOVE':
                 if (this.callbacks.onReject) this.callbacks.onReject();
                 break;
+            case 'CHAT':
+                if (this.callbacks.onChat) this.callbacks.onChat(data.sender, data.text);
+                break;
         }
+    }
+
+    sendChat(text) {
+        this.peerManager.sendTo(this.hostPeerId, {
+            type: 'CHAT',
+            text: text
+        });
     }
 
     sendMove(x, y) {

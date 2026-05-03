@@ -61,10 +61,26 @@
         
         <div id="game-ui" class="screen">
             <div id="room-code-display">Room: <span>---</span></div>
-            <div id="side-stats-left" class="side-stats"></div>
-            <div id="side-stats-right" class="side-stats"></div>
             <div id="turn-indicator">Player's Turn</div>
-            <div id="player-stats"></div>
+            
+            <div class="game-layout">
+                <!-- Left Pane: Player Stats -->
+                <div class="side-pane left">
+                    <h3>Players</h3>
+                    <div id="player-stats"></div>
+                </div>
+
+                <!-- Center area is empty for the canvas -->
+
+                <!-- Right Pane: Chat -->
+                <div class="side-pane right">
+                    <h3>Chat</h3>
+                    <div id="chat-messages"></div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chat-input" placeholder="Type a message...">
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

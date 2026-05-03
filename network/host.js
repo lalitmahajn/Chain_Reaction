@@ -47,6 +47,13 @@ export class GameHost {
                     this.callbacks.onMoveReceived(peerId, data.x, data.y);
                 }
                 break;
+            case 'CHAT':
+                const sender = this.players.find(p => p.peerId === peerId);
+                if (sender) {
+                    this.broadcastChat(sender.name, data.text);
+                    if (this.callbacks.onChat) this.callbacks.onChat(sender.name, data.text);
+                }
+                break;
         }
     }
 
@@ -150,5 +157,21 @@ export class GameHost {
 
     rejectMove(peerId) {
         this.peerManager.sendTo(peerId, { type: 'REJECT_MOVE' });
+    }
+
+    sendChat(text) {
+        const hostPlayer = this.players.find(p => p.peerId === this.peerManager.peer.id);
+        if (hostPlayer) {
+            this.broadcastChat(hostPlayer.name, text);
+            if (this.callbacks.onChat) this.callbacks.onChat(hostPlayer.name, text);
+        }
+    }
+
+    broadcastChat(sender, text) {
+        this.peerManager.broadcast({
+            type: 'CHAT',
+            sender,
+            text
+        });
     }
 }

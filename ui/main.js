@@ -43,9 +43,21 @@ const playerCountUI = document.getElementById('player-count');
 const savedName = localStorage.getItem('cr-player-name');
 if (savedName) nameInput.value = savedName;
 
+const chatMessagesUI = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+
 function showScreen(screenId) {
     Object.values(screens).forEach(s => s.classList.remove('active'));
     screens[screenId].classList.add('active');
+}
+
+function addChatMessage(sender, text) {
+    if (!chatMessagesUI) return;
+    const msg = document.createElement('div');
+    msg.className = 'chat-msg';
+    msg.innerHTML = `<span class="sender">${sender}:</span><span class="text">${text}</span>`;
+    chatMessagesUI.appendChild(msg);
+    chatMessagesUI.scrollTop = chatMessagesUI.scrollHeight;
 }
 
 function updatePlayerListUI(players) {
@@ -192,6 +204,7 @@ confirmBtn.addEventListener('click', async () => {
         networkRole = new GameHost(roomName, {
             onPlayerJoined: (players) => updatePlayerListUI(players),
             onMoveReceived: (peerId, x, y) => handleHostMoveRequest(peerId, x, y),
+            onChat: (sender, text) => addChatMessage(sender, text),
             onStart: onStartGame,
             onSyncRequested: () => {
                 const scene = game.scene.getScene('GameScene');
@@ -205,6 +218,7 @@ confirmBtn.addEventListener('click', async () => {
     } else {
         networkRole = new GameClient({
             onPlayerList: (players) => updatePlayerListUI(players),
+            onChat: (sender, text) => addChatMessage(sender, text),
             onStart: onStartGame,
             onMove: (x, y, pid, nextTurnIndex) => {
                 // Handled in onStartGame
@@ -232,4 +246,14 @@ document.getElementById('room-code-display').addEventListener('click', () => {
             document.getElementById('room-code-display').innerHTML = originalText;
         }, 2000);
     });
+});
+
+chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        const text = chatInput.value.trim();
+        if (text && networkRole && networkRole.sendChat) {
+            networkRole.sendChat(text);
+            chatInput.value = '';
+        }
+    }
 });
