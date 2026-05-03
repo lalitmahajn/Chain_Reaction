@@ -462,12 +462,7 @@ input:focus, select:focus {
     }
 }
 
-/* Hide top stats on desktop if side stats are visible */
-@media (min-width: 1025px) {
-    #player-stats {
-        display: none;
-    }
-}
+
 
 .player-stat-item {
     background: rgba(15, 23, 42, 0.7);
@@ -737,4 +732,9 @@ input:focus, select:focus {
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
     font-size: 0.85rem;
+}
+
+#player-stats {
+    flex-direction: column;
+    justify-content: flex-start;
 }
